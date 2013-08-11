@@ -10,7 +10,7 @@ LICENSE:
 "MIT license" (free for any purpose as long as license is included).
 
 USAGE:
-./name_importer.py <FILENAME>.csv
+./name_importer.py [FILENAME].csv
 
 Takes a CSV file where the first column contains the names of survey respondents in the form "LAST, FIRST MIDDLE". The second column contains a list of names given by each respondent, separated by commas or semicolons. For an example, look at "survey.csv".
 
