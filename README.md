@@ -12,6 +12,7 @@ $ python name_importer.py [FILENAME_1].csv [FILENAME_2].csv ... [FILENAME_N].csv
 Takes a list of any number of CSV files. The first column of each CSV file shold contain the names of survey respondents, in the form "LAST, FIRST MIDDLE". The second column of each CSV file should contain a list of names given by each respondent, separated by commas or semicolons. For examples, look at "survey1.csv" and "survey2.csv".
 
 Output:
+
 [FILENAME_1].matches.csv
 [FILENAME_1].sociomatrix.csv
 ...
