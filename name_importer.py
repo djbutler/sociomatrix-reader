@@ -14,7 +14,6 @@ from difflib import SequenceMatcher
 import sys
 import copy
 
-
 def legitchar(c):
     return c == " " or c == "," or str.isalpha(c)
 
@@ -47,9 +46,13 @@ def compare_names(written_name, official_name, strictness):
         else:
             last_written = ''
         first_written = written_name.split(' ')[0].upper()
-        # pre-process official_name
-    last_official = official_name.split(', ')[0].split(' ')[-1]
-    first_official = official_name.split(', ')[1].split(' ')[0]
+    # pre-process official_name
+    if ',' in official_name:
+        last_official = official_name.split(', ')[0].split(' ')[-1]
+        first_official = official_name.split(', ')[1].split(' ')[0]
+    else:
+        last_official = official_name.split(' ')[-1]
+        first_official = official_name.split(' ')[0]
     common_len = longest_common_subseq(first_written, first_official)
     if strictness == 0:
         # first names match and no last name given
@@ -81,17 +84,6 @@ def find_name_in_list(written_name, official_names):
             all_matches += matches
     return all_matches
 
-
-def sparse2dense(sparsemat, nrows, ncols):
-    # expects a list of lists of indices: [[26], [454], [], [5, 89, 596, 727]]
-    dense = []
-    for i in range(nrows):
-        dense.append([0] * ncols)
-        for col in sparsemat[i]:
-            dense[i][col] = 1
-    return dense
-
-
 def matrix2csv(fname, mat, row_labels, col_labels):
     assert (len(mat) == len(row_labels))
     assert (len(mat[0]) == len(col_labels))
@@ -118,90 +110,123 @@ def error_row(resp_id, respondee, written_name, choices, full_resp):
     return row
 
 
-def errors2csv(fname, official_names, raw_rows, nomatches, multimatches):
+def errors2csv(fname, official_names, row_labels, raw_rows, nomatches, multimatches):
     myfile = open(fname, 'wb')
     wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
     wr.writerow(HEADERS)
     for i in range(len(multimatches)):
         for written_name in nomatches[i]:
-            wr.writerow(error_row(i, official_names[i], written_name, "", raw_rows[i][1]))
+            wr.writerow(error_row(i, row_labels[i], written_name, "", raw_rows[i][1]))
         for (written_name, name_idxs) in multimatches[i]:
             choices = ";  ".join([official_names[name_idx] for name_idx in name_idxs])
-            wr.writerow(error_row(i, official_names[i], written_name, choices, raw_rows[i][1]))
+            wr.writerow(error_row(i, row_labels[i], written_name, choices, raw_rows[i][1]))
     myfile.close()
 
 
-FNAME = sys.argv[1]
-f = open(FNAME, 'r')
+FNAMES = sys.argv[1:]
 
-csv_reader = csv.reader(f)
-raw_rows = []
+official_names = []
+# get official_names list (union of the names in all the files)
+for fname in FNAMES:
+    f = open(fname, 'r')
 
-for row in csv_reader:
-    raw_rows.append(row)
+    csv_reader = csv.reader(f)
+    raw_rows = []
 
-f.close()
+    for row in csv_reader:
+        raw_rows.append(row)
 
-# Column 0 gives the names of the survey respondents
-official_names = [row[0] for row in raw_rows]
+    f.close()
 
-# Names in survey responses that were successfully matched to a UNIQUE respondent name
-matches = range(len(raw_rows))
-# Names in survey responses that were not matched to ANY respondent name
-nomatches = range(len(raw_rows))
-# Names in survey responses that were matched to MULTIPLE respondent name
-multimatches = range(len(raw_rows))
+    # Column 0 gives the names of the survey respondents
+    official_names = list(set([row[0] for row in raw_rows]).union(set(official_names)))
 
+for fname in FNAMES:
+    f = open(fname, 'r')
 
-# Remove "none"-like reponses that indicate an empty list
-empty_terms = ['', 'None', 'none']
+    csv_reader = csv.reader(f)
+    raw_rows = []
 
+    for row in csv_reader:
+        raw_rows.append(row)
 
-def get_interp(names):
-    clean_names = [x for x in [s.strip() for s in names] if x not in empty_terms]
-    return [find_name_in_list(written_name, official_names) for written_name in clean_names]
+    f.close()
+    row_labels = [row[0] for row in raw_rows]
+    
+    # Names in survey responses that were successfully matched to a UNIQUE respondent name
+    matches = range(len(raw_rows))
+    # Names in survey responses that were not matched to ANY respondent name
+    nomatches = range(len(raw_rows))
+    # Names in survey responses that were matched to MULTIPLE respondent name
+    multimatches = range(len(raw_rows))
+    # NAs
+    nas = range(len(raw_rows))
 
-# Split comma-delimited name-lists
-split_rows = copy.deepcopy(raw_rows)
-# Main loop
-for i in range(len(raw_rows)):
-    print("Processing row %d" % i)
-    s = raw_rows[i][1]
-    # some important splitting possibilities:
-    poss_splits = [
-        # First Last; First Last; ...
-        # Last, First; Last, First; ...
-        s.strip().split(";"),
-        # First Last, First Last, ...
-        s.strip().split(","),
-        # Last, First. Last, First. ...
-        s.strip().split("."),
-        # "Last, First" "Last, First" ...
-        s.strip().split('\"')[1::2],
-    ]
-    ###
-    # an interpretation of a survey response is a list of lists of possible name idxs
-    # in an unambiguous interpretation, each list has length 1
-    interps = [zip(names, get_interp(names)) for names in poss_splits]
-    # best_interp maximizes number of unambiguous names
-    best_interp = max(interps, key=lambda interp: sum([len(idxs) == 1 for (names, idxs) in interp]))
-    # save results
-    matches[i] = []
-    nomatches[i] = []
-    multimatches[i] = []
-    for (name, idxs) in best_interp:
-        if len(idxs) == 1:
-            matches[i].append(idxs[0])
-        elif len(idxs) == 0:
-            nomatches[i].append(name)
-        elif len(idxs) > 1:
-            multimatches[i].append((name, idxs))
+    # Remove "none"-like reponses that indicate an empty list
+    empty_terms = ['', 'None', 'none']
 
-# Save the match matrix
-match_mat = sparse2dense(matches, len(official_names), len(official_names))
-basename = sys.argv[1].split('.')[0]
-matrix2csv(basename + ".sociomatrix.csv", match_mat, official_names, official_names)
-errors2csv(basename + ".matches.csv", official_names, raw_rows, nomatches, multimatches)
+    def get_interp(names):
+        clean_names = [x for x in [s.strip() for s in names] if x not in empty_terms]
+        return [find_name_in_list(written_name, official_names) for written_name in clean_names]
+
+    # Split comma-delimited name-lists
+    split_rows = copy.deepcopy(raw_rows)
+    # Main loop
+    for i in range(len(raw_rows)):
+        print("Processing row %d" % i)
+        s = raw_rows[i][1]
+        matches[i] = []
+        nomatches[i] = []
+        multimatches[i] = []
+        nas[i] = False
+        if 'no comment' in s.lower():
+            nas[i] = True
+        else:
+            # some important splitting possibilities:
+            poss_splits = [
+                # First Last; First Last; ...
+                # Last, First; Last, First; ...
+                s.strip().split(";"),
+                # First Last, First Last, ...
+                s.strip().split(","),
+                # Last, First. Last, First. ...
+                s.strip().split("."),
+                # "Last, First" "Last, First" ...
+                s.strip().split('\"')[1::2],
+            ]
+            ###
+            # an interpretation of a survey response is a list of lists of possible name idxs
+            # in an unambiguous interpretation, each list has length 1
+            interps = [zip(names, get_interp(names)) for names in poss_splits]
+            # best_interp maximizes number of unambiguous names
+            best_interp = max(interps, key=lambda interp: sum([len(idxs) == 1 for (names, idxs) in interp]))
+            # save results
+            for (name, idxs) in best_interp:
+                if len(idxs) == 1:
+                    matches[i].append(idxs[0])
+                elif len(idxs) == 0:
+                    nomatches[i].append(name)
+                elif len(idxs) > 1:
+                    multimatches[i].append((name, idxs))
+
+    # Save the match matrix        
+    dense = []
+    # import pdb; pdb.set_trace()
+    for i in range(len(official_names)):
+        if official_names[i] in row_labels:
+            idx = row_labels.index(official_names[i])
+            if nas[idx]:
+                dense.append(['NA'] * len(official_names))
+            else:
+                dense.append([0] * len(official_names))
+                for col in matches[idx]:
+                    dense[i][col] = 1
+        else:
+            dense.append(['NA'] * len(official_names))
+    
+    basename = fname.split('.')[0]
+    matrix2csv(basename + ".sociomatrix.csv", dense, official_names, official_names)
+    errors2csv(basename + ".matches.csv", official_names, row_labels, raw_rows, nomatches, multimatches)
 
 # save the nomatches
 # print_errors(basename + ".failures.txt",multimatches,nomatches)
