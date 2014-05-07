@@ -15,7 +15,9 @@ Output:
 
 [FILENAME_1].matches.csv
 [FILENAME_1].sociomatrix.csv
+
 ...
+
 [FILENAME_N].matches.csv
 [FILENAME_N].sociomatrix.csv
 
