@@ -40,7 +40,7 @@ Each [FILENAME].sociomatrix.csv contains a binary matrix which encodes the surve
 
 **Example usage:**
 
-$ python name_importer.py survey1.csv survey2.csv
+$ python name_importer.py survey1.csv survey2.csv --nicknames nicknames.csv
 
 ==================
 License: "MIT license" (free for any purpose as long as license is included).
