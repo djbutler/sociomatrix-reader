@@ -5,9 +5,22 @@ Parses a set of survey responses into a sociomatrix.
 
 Dependencies: python 2.7
 
-**Usage:**
+```
+usage: name_importer.py [-h] [--ignoreheaders] [--nicknames NICKNAMES.csv]
+                        SURVEY.csv [SURVEY.csv ...]
 
-$ python name_importer.py [FILENAME_1].csv [FILENAME_2].csv ... [FILENAME_N].csv
+Process some surveys.
+
+positional arguments:
+  SURVEY.csv            a survey to process
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --ignoreheaders       ignore first row in each survey CSV file (useful for
+                        ignoring column headers)
+  --nicknames NICKNAMES.csv
+                        a CSV file containing a list of nicknames
+````
 
 Takes a list of any number of CSV files. The first column of each CSV file shold contain the names of survey respondents, in the form "LAST, FIRST MIDDLE". The second column of each CSV file should contain a list of names given by each respondent, separated by commas or semicolons. For examples, look at "survey1.csv" and "survey2.csv".
 
