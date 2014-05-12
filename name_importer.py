@@ -13,6 +13,7 @@ import re
 from difflib import SequenceMatcher
 import sys
 import copy
+import argparse
 
 def legitchar(c):
     return c == " " or c == "," or str.isalpha(c)
@@ -23,7 +24,7 @@ def longest_common_subseq(a, b):
     return s.find_longest_match(0, len(a), 0, len(b)).size
 
 
-def compare_names(written_name, official_name, strictness):
+def compare_names(written_name, official_name, nicknames, strictness):
     """Strictness between 0-4 indicates how confident the match needs to be"""
     # important cases:
     #   First Last
@@ -56,27 +57,27 @@ def compare_names(written_name, official_name, strictness):
     common_len = longest_common_subseq(first_written, first_official)
     if strictness == 0:
         # first names match and no last name given
-        return first_written == first_official and last_written == ""
+        return (first_written == first_official or first_written in nicknames) and last_written == ""
     if strictness == 1:
         # first names overlap by 3 chars and last initials match
         return common_len >= 3 and len(last_written) == 1 and last_written[0] == last_official[0]
     elif strictness == 2:
         # first names match and last initials match
-        return first_written == first_official and len(last_written) == 1 and last_written[0] == last_official[0]
+        return (first_written == first_official or first_written in nicknames) and len(last_written) == 1 and last_written[0] == last_official[0]
     elif strictness == 3:
         # first names overlap by 3 chars and last names match
         return common_len >= 3 and last_written == last_official
     else:
         # first names and last names match
-        return first_written == first_official and last_written == last_official
+        return (first_written == first_official or first_written in nicknames) and last_written == last_official
 
 
-def find_name_in_list(written_name, official_names):
+def find_name_in_list(written_name, official_names, nicknames):
     all_matches = []
     for strictness in reversed(range(5)):
         matches = []
         for i in range(len(official_names)):
-            if compare_names(written_name, official_names[i], strictness):
+            if compare_names(written_name, official_names[i], nicknames.get(official_names[i], []), strictness):
                 matches.append(i)
         if len(matches) == 1:
             return matches
@@ -121,13 +122,8 @@ def errors2csv(fname, official_names, row_labels, raw_rows, nomatches, multimatc
             choices = ";  ".join([official_names[name_idx] for name_idx in name_idxs])
             wr.writerow(error_row(i, row_labels[i], written_name, choices, raw_rows[i][1]))
     myfile.close()
-
-
-FNAMES = sys.argv[1:]
-
-official_names = []
-# get official_names list (union of the names in all the files)
-for fname in FNAMES:
+    
+def read_csv(fname, ignoreheaders=False):
     f = open(fname, 'r')
 
     csv_reader = csv.reader(f)
@@ -137,20 +133,44 @@ for fname in FNAMES:
         raw_rows.append(row)
 
     f.close()
+    
+    if ignoreheaders:
+        raw_rows = raw_rows[1:]
+    return raw_rows
+
+parser = argparse.ArgumentParser(description='Process some surveys.')
+parser.add_argument('surveys', metavar='SURVEY.csv', nargs='+',
+                   help='a survey to process')
+parser.add_argument('--ignoreheaders', action='store_true',
+                   help='ignore first row in each survey CSV file (useful for ignoring column headers)')
+parser.add_argument('--nicknames', metavar='NICKNAMES.csv',
+                   help='a CSV file containing a list of nicknames')
+
+args = parser.parse_args()
+print args
+
+FNAMES = args.surveys
+
+# load nicknames, if present
+nicknames = {}
+if args.nicknames:
+    nickname_rows = read_csv(args.nicknames, ignoreheaders=args.ignoreheaders)
+    nicknames = dict([(r[0].strip(), [s.strip().upper() for s in r[1].strip().split(',')]) for r in nickname_rows])
+    from pprint import pprint
+    pprint(nicknames)
+
+# get official_names list (union of the names in all the files)
+official_names = []
+for fname in FNAMES:
+    raw_rows = read_csv(fname, ignoreheaders=args.ignoreheaders)
 
     # Column 0 gives the names of the survey respondents
     official_names = list(set([row[0] for row in raw_rows]).union(set(official_names)))
-
+    
+# loop through the surveys, processing them one by one
 for fname in FNAMES:
-    f = open(fname, 'r')
+    raw_rows = read_csv(fname, ignoreheaders=args.ignoreheaders)
 
-    csv_reader = csv.reader(f)
-    raw_rows = []
-
-    for row in csv_reader:
-        raw_rows.append(row)
-
-    f.close()
     row_labels = [row[0] for row in raw_rows]
     
     # Names in survey responses that were successfully matched to a UNIQUE respondent name
@@ -167,7 +187,7 @@ for fname in FNAMES:
 
     def get_interp(names):
         clean_names = [x for x in [s.strip() for s in names] if x not in empty_terms]
-        return [find_name_in_list(written_name, official_names) for written_name in clean_names]
+        return [find_name_in_list(written_name, official_names, nicknames) for written_name in clean_names]
 
     # Split comma-delimited name-lists
     split_rows = copy.deepcopy(raw_rows)
