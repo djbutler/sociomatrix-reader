@@ -16,8 +16,8 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-  --ignoreheaders       ignore first row in each survey CSV file (useful for
-                        ignoring column headers)
+  --ignoreheaders       ignore first row in each CSV file (useful for ignoring
+                        column headers)
   --nicknames NICKNAMES.csv
                         a CSV file containing a list of nicknames
 ````

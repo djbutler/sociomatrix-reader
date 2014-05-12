@@ -142,7 +142,7 @@ parser = argparse.ArgumentParser(description='Process some surveys.')
 parser.add_argument('surveys', metavar='SURVEY.csv', nargs='+',
                    help='a survey to process')
 parser.add_argument('--ignoreheaders', action='store_true',
-                   help='ignore first row in each survey CSV file (useful for ignoring column headers)')
+                   help='ignore first row in each CSV file (useful for ignoring column headers)')
 parser.add_argument('--nicknames', metavar='NICKNAMES.csv',
                    help='a CSV file containing a list of nicknames')
 
