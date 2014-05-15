@@ -22,8 +22,20 @@ def legitchar(c):
 def longest_common_subseq(a, b):
     s = SequenceMatcher(None, a, b)
     return s.find_longest_match(0, len(a), 0, len(b)).size
+    
 
+def psuedo_edit_distance(s1, s2):
+    a = b = size = distance = 0
+    for m in SequenceMatcher(a=s1, b=s2).get_matching_blocks():
+        distance += max(m.a-a, m.b-b) - size
+        a, b, size = m
+    return distance
 
+def psuedo_edit_ratio(s1, s2):
+    a = b = size = distance = 0
+    return SequenceMatcher(a=s1, b=s2).ratio()
+    
+    
 def compare_names(written_name, official_name, nicknames, strictness):
     """Strictness between 0-4 indicates how confident the match needs to be"""
     # important cases:
@@ -51,30 +63,40 @@ def compare_names(written_name, official_name, nicknames, strictness):
     if ',' in official_name:
         last_official = official_name.split(', ')[0].split(' ')[-1]
         first_official = official_name.split(', ')[1].split(' ')[0]
+        middle_official = official_name.split(', ')[1].split(' ')[-1]
     else:
         last_official = official_name.split(' ')[-1]
         first_official = official_name.split(' ')[0]
+        middle_official = official_name.split(' ')[-1]
     common_len = longest_common_subseq(first_written, first_official)
+    first_match = first_written == first_official or first_written in nicknames
+    last_match = last_written == last_official or (len(last_written) >= 5 and len(last_official) >= 5 and psuedo_edit_ratio(last_written, last_official) >= 0.8)
     if strictness == 0:
         # first names match and no last name given
-        return (first_written == first_official or first_written in nicknames) and last_written == ""
+        return first_match and last_written == ""
     if strictness == 1:
         # first names overlap by 3 chars and last initials match
         return common_len >= 3 and len(last_written) == 1 and last_written[0] == last_official[0]
     elif strictness == 2:
         # first names match and last initials match
-        return (first_written == first_official or first_written in nicknames) and len(last_written) == 1 and last_written[0] == last_official[0]
+        return first_match and len(last_written) == 1 and last_written[0] == last_official[0]
     elif strictness == 3:
         # first names overlap by 3 chars and last names match
-        return common_len >= 3 and last_written == last_official
+        return common_len >= 3 and last_match
+    elif strictness == 4:
+        # first initials match and last names match
+        return len(first_written) > 0 and first_written[0] == first_official[0] and last_match
+    elif strictness == 5:
+        # written first matches official middle and last names match
+        return first_written == middle_official and last_match
     else:
         # first names and last names match
-        return (first_written == first_official or first_written in nicknames) and last_written == last_official
+        return first_match and last_match
 
 
 def find_name_in_list(written_name, official_names, nicknames):
     all_matches = []
-    for strictness in reversed(range(5)):
+    for strictness in reversed(range(7)):
         matches = []
         for i in range(len(official_names)):
             if compare_names(written_name, official_names[i], nicknames.get(official_names[i], []), strictness):
@@ -127,8 +149,8 @@ def read_csv(fname, ignoreheaders=False):
     f = open(fname, 'r')
 
     csv_reader = csv.reader(f)
-    raw_rows = []
-
+    raw_rows = [row for row in csv.reader(f.read().splitlines())]
+    
     for row in csv_reader:
         raw_rows.append(row)
 
@@ -165,7 +187,7 @@ for fname in FNAMES:
     raw_rows = read_csv(fname, ignoreheaders=args.ignoreheaders)
 
     # Column 0 gives the names of the survey respondents
-    official_names = list(set([row[0] for row in raw_rows]).union(set(official_names)))
+    official_names = list(set([row[0].strip().upper() for row in raw_rows]).union(set(official_names)))
     
 # loop through the surveys, processing them one by one
 for fname in FNAMES:
@@ -201,6 +223,8 @@ for fname in FNAMES:
         nas[i] = False
         if 'no comment' in s.lower():
             nas[i] = True
+        elif 'nobody' in s.lower():
+            continue
         else:
             # some important splitting possibilities:
             poss_splits = [
